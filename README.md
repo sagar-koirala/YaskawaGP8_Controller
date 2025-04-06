@@ -58,7 +58,7 @@ The project consists of several core modules:
 
 Here's a short demonstration of the controller in action:
 
-https://github.com/yourusername/YaskawaGP8_Controller/raw/main/docs/GUIdemo.mp4
+<video src="docs/GUIdemo.mp4" width="320" height="240" controls autoplay muted></video>
 
 ## Mathematical Background
 
