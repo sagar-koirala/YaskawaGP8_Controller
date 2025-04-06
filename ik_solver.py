@@ -3,19 +3,6 @@ from scipy.optimize import minimize
 import sympy as sp
 
 def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_joints=None):
-    """
-    Inverse Kinematics solver for 6DOF robot arm (Yaskawa GP8) with joint limits
-    
-    Parameters:
-    X, Y, Z (float): End-effector position in meters
-    Roll, Pitch, Yaw (float): End-effector orientation in degrees
-    desired_wrist (str): "up", "down", or "any" configuration preference
-    current_joints (list): Current joint angles in degrees (used as initial guess)
-    
-    Returns:
-    list: 6 joint angles in degrees [q1, q2, q3, q4, q5, q6], or None if no solution
-    """
-    
     # Define joint limits in degrees (Yaskawa GP8)
     joint_limits = [
         (-170, 170),  # q1
@@ -55,7 +42,7 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     # Define the DH parameters as constants
     d1 = 0.33002  # base height
     a1 = 0.01867  # link 0 length
-    a2 = 0.04     # link 1 length (corrected to match GP8_IKsolver.py)
+    a2 = 0.04     # link 1 length
     a3 = 0.345    # link 2 length
     d4 = -0.34    # link 3 offset
     
@@ -113,7 +100,6 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     while q1_deg < -180:
         q1_deg += 360
     if not (joint_limits[0][0] <= q1_deg <= joint_limits[0][1]):
-        print(f"q1 ({q1_deg:.2f}°) is out of joint limits {joint_limits[0]} after normalization")
         return None
     
     q2, q3 = sp.symbols('q2 q3', real=True)
@@ -144,7 +130,6 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     result = minimize(wrist_error, q0, bounds=bounds, method='SLSQP')
     
     if not result.success:
-        print("Position IK optimization failed:", result.message)
         return None
     
     q2_calculated = result.x[0]
@@ -154,10 +139,8 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     q3_deg = np.degrees(q3_calculated)
     
     if not (joint_limits[1][0] <= q2_deg <= joint_limits[1][1]):
-        print(f"q2 ({q2_deg:.2f}°) is out of joint limits {joint_limits[1]}")
         return None
     if not (joint_limits[2][0] <= q3_deg <= joint_limits[2][1]):
-        print(f"q3 ({q3_deg:.2f}°) is out of joint limits {joint_limits[2]}")
         return None
     
     # ORIENTATION INVERSE KINEMATICS (LAST 3 JOINTS)
@@ -177,24 +160,18 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
         R36 = T36[0:3, 0:3]
         return np.linalg.norm(R36 - R3_6)
     
-    # Add a function to calculate joint distance from current configuration
     def joint_distance(q, current_q=None):
         if current_q is None:
             return 0
         return np.sum(np.square(np.array(q) - np.array(current_q)))
     
-    # Combined objective function with optional regularization
     def combined_objective(q):
         ori_err = orientation_error(q)
         if current_joints is not None:
-            # Get the last 3 angles from current joints and convert to radians
             current_q456 = np.radians(current_joints[3:6])
-            # Add regularization term to keep solution close to current joints
-            # Weight of 0.1 means orientation error is still the primary objective
             return ori_err + 0.1 * joint_distance(q, current_q456)
         return ori_err
     
-    # Initialize arrays with enough space for additional guess
     base_guesses = 6
     num_initial_guesses = base_guesses
     if current_joints is not None and len(current_joints) >= 6:
@@ -205,17 +182,15 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     all_distances = np.ones(num_initial_guesses) * float('inf')
     valid_solutions = 0
     
-    # Use fixed initial guesses
     initial_guesses = [
-        [0, 0, 0],               # Neutral position
-        [np.pi/2, np.pi/4, 0],   # Alternative configuration 1
-        [-np.pi/2, -np.pi/4, 0], # Alternative configuration 2
-        [0, np.pi/2, 0],         # Alternative configuration 3
-        [0, -np.pi/2, 0],        # Alternative configuration 4
-        [np.pi/2, 0, np.pi/2]    # Alternative configuration 5
+        [0, 0, 0],
+        [np.pi/2, np.pi/4, 0],
+        [-np.pi/2, -np.pi/4, 0],
+        [0, np.pi/2, 0],
+        [0, -np.pi/2, 0],
+        [np.pi/2, 0, np.pi/2]
     ]
     
-    # Add current joint angles as an initial guess if available
     if current_joints is not None and len(current_joints) >= 6:
         initial_guesses.append(np.radians(current_joints[3:6]))
     
@@ -232,7 +207,6 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
             all_solutions[valid_solutions] = result.x
             all_errors[valid_solutions] = orientation_error(result.x)
             
-            # Calculate distance from current configuration
             if current_joints is not None and len(current_joints) >= 6:
                 all_distances[valid_solutions] = joint_distance(result.x, np.radians(current_joints[3:6]))
             else:
@@ -240,7 +214,6 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
                 
             valid_solutions += 1
     
-    # Default values in case no solution is found
     q4_calculated = 0.0
     q5_calculated = 0.0
     q6_calculated = 0.0
@@ -248,25 +221,18 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     best_idx = -1
     best_score = float('inf')
     
-    # Modified selection criteria:
-    # 1. Filter by wrist configuration if specified
-    # 2. Among acceptable wrist configurations, select the one closest to current joints
     for i in range(valid_solutions):
         q5_val_current = all_solutions[i, 1]
         is_wrist_up = q5_val_current > 0
         
-        # Check if solution matches desired wrist configuration
         wrist_match = ((is_wrist_up and desired_wrist == "up") or 
                       (not is_wrist_up and desired_wrist == "down") or 
                       (desired_wrist == "any"))
         
         if wrist_match:
-            # Composite score: weighted sum of orientation error and joint distance
-            # Prioritize solutions close to current configuration when errors are similar
             error_weight = 0.7
             distance_weight = 0.3
             
-            # Normalize distance if we have current joints
             if current_joints is not None:
                 score = error_weight * all_errors[i] + distance_weight * all_distances[i]
             else:
@@ -276,16 +242,13 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
                 best_idx = i
                 best_score = score
     
-    # If no wrist-matching solution found, pick the best overall
     if best_idx == -1 and valid_solutions > 0:
         if current_joints is not None:
-            # Consider both error and distance
             normalized_errors = all_errors[:valid_solutions] / np.max(all_errors[:valid_solutions]) if np.max(all_errors[:valid_solutions]) > 0 else all_errors[:valid_solutions]
             normalized_distances = all_distances[:valid_solutions] / np.max(all_distances[:valid_solutions]) if np.max(all_distances[:valid_solutions]) > 0 else all_distances[:valid_solutions]
             composite_scores = 0.7 * normalized_errors + 0.3 * normalized_distances
             best_idx = np.argmin(composite_scores)
         else:
-            # Just use error if no current joints
             best_idx = np.argmin(all_errors[:valid_solutions])
     
     if best_idx != -1:
@@ -293,7 +256,6 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
         q5_calculated = all_solutions[best_idx, 1]
         q6_calculated = all_solutions[best_idx, 2]
     else:
-        # Fallback optimization with current joints as initial guess if available
         initial_guess = np.radians(current_joints[3:6]) if current_joints is not None else [0, 0, 0]
         result = minimize(combined_objective, initial_guess, 
                           bounds=bounds, method='SLSQP')
@@ -302,7 +264,6 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
             q5_calculated = result.x[1]
             q6_calculated = result.x[2]
         else:
-            print("Orientation IK optimization failed:", result.message)
             return None
     
     q1_deg = np.degrees(q1_calculated)
@@ -315,7 +276,6 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     joint_angles = [q1_deg, q2_deg, q3_deg, q4_deg, q5_deg, q6_deg]
     for i, (angle, limit) in enumerate(zip(joint_angles, joint_limits)):
         if not (limit[0] <= angle <= limit[1]):
-            print(f"Joint q{i+1} ({angle:.2f}°) is out of joint limits {limit}")
             return None
     
     T01 = DH_matrix(np.radians(q1_deg), d1, a1, 0)
@@ -329,18 +289,10 @@ def inverse_kinematics(X, Y, Z, Roll, Pitch, Yaw, desired_wrist="any", current_j
     pos_error = np.linalg.norm(T07[0:3, 3] - np.array([X, Y, Z]))
     ori_error = np.linalg.norm(T07[0:3, 0:3] - R_target)
     
-    pos_error_threshold = 0.02  # 20mm
-    ori_error_threshold = 0.12  # ~7 degrees
+    pos_error_threshold = 0.02
+    ori_error_threshold = 0.12
     
-    if pos_error > pos_error_threshold or ori_error > ori_error_threshold:
-        print(f"Warning: Solution has errors - Position error = {pos_error:.6f}, Orientation error = {ori_error:.6f}")
-        
-        # If errors are extremely high, still consider it invalid
-        if pos_error > 0.05 or ori_error > 0.25:  # 50mm or ~15 degrees
-            print("Validation failed: Errors are too large for practical use")
-            return None
-        
-        # If errors are moderate, show warning but still return solution
-        print("Proceeding with approximate solution - may have small positioning errors")
+    if pos_error > 0.05 or ori_error > 0.25:
+        return None
     
     return joint_angles

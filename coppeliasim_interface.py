@@ -38,7 +38,6 @@ class CoppeliaSimInterface:
         try:
             if self.sim is not None:
                 self.sim.stopSimulation()
-            # Reset all connection-related attributes
             self.sim = None
             self.client = None
             self.joint_handles = []
@@ -136,7 +135,7 @@ class CoppeliaSimInterface:
         
         try:
             resolution = self.sim.getVisionSensorResolution(camera_handle)
-            fov = self.sim.getObjectFloatParam(camera_handle, 1004)  # 1004 is perspective angle parameter
+            fov = self.sim.getObjectFloatParam(camera_handle, 1004)
             return resolution, fov
         except Exception as e:
             print(f"Failed to get camera parameters: {e}")
@@ -144,26 +143,20 @@ class CoppeliaSimInterface:
             
     def create_or_update_dummy(self, name, position=None, orientation=None, reference_handle=-1, 
                               quaternion=None, size=0.05, visible=True, existing_handle=None):
-        """Create a new dummy or update an existing one with the specified properties"""
         if not self.is_connected():
             return None
             
         try:
-            # Create or use existing handle
             handle = existing_handle
             if handle is None:
                 handle = self.sim.createDummy(size)
                 self.sim.setObjectName(handle, name)
-            # Set position if provided
             if position is not None:
                 self.sim.setObjectPosition(handle, reference_handle, position)
-            # Set orientation if provided
             if orientation is not None:
                 self.sim.setObjectOrientation(handle, reference_handle, orientation)
-            # Set quaternion if provided
             if quaternion is not None:
                 self.sim.setObjectQuaternion(handle, reference_handle, quaternion)
-            # Set visibility
             if visible:
                 self.sim.setObjectInt32Param(handle, self.sim.objintparam_visibility_layer, 1)
             else:
@@ -173,9 +166,7 @@ class CoppeliaSimInterface:
             print(f"Failed to create or update dummy: {e}")
             return None
             
-    # Keep these utility functions as they encapsulate common operations
     def get_object_position(self, handle, reference_handle=-1):
-        """Get the position of an object relative to a reference frame"""
         if not self.is_connected():
             return None
         try:
@@ -185,20 +176,10 @@ class CoppeliaSimInterface:
             return None
     
     def set_joint_velocities(self, velocities):
-        """
-        Set the velocity of each joint.
-        
-        Args:
-            velocities (list): List of joint velocities in degrees/second
-        
-        Returns:
-            bool: Success or failure
-        """
         if not self.is_connected():
             return False
         try:
             for handle, velocity in zip(self.joint_handles, velocities):
-                # Convert degrees/second to radians/second
                 velocity_rad = np.radians(velocity)
                 self.sim.setJointTargetVelocity(handle, velocity_rad)
             return True
@@ -207,12 +188,6 @@ class CoppeliaSimInterface:
             return False
     
     def get_joint_velocities(self):
-        """
-        Get the current velocity of each joint.
-        
-        Returns:
-            list: List of joint velocities in degrees/second or None if failed
-        """
         if not self.is_connected():
             return None
         velocities = []
@@ -226,7 +201,6 @@ class CoppeliaSimInterface:
             return None
         
     def get_object_orientation(self, handle, reference_handle=-1):
-        """Get the orientation of an object relative to a reference frame"""
         if not self.is_connected():
             return None
         try:
@@ -238,7 +212,6 @@ class CoppeliaSimInterface:
             return None
             
     def get_object_quaternion(self, handle, reference_handle=-1):
-        """Get the quaternion of an object relative to a reference frame"""
         if not self.is_connected():
             return None
         try:
@@ -248,7 +221,6 @@ class CoppeliaSimInterface:
             return None
             
     def set_object_quaternion(self, handle, reference_handle, quaternion):
-        """Set the quaternion of an object relative to a reference frame"""
         if not self.is_connected():
             return False
         try:
@@ -259,7 +231,6 @@ class CoppeliaSimInterface:
             return False
             
     def set_object_visibility(self, handle, visible, layer=1):
-        """Set the visibility of an object"""
         if not self.is_connected():
             return False
         try:

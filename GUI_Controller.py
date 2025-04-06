@@ -8,11 +8,10 @@ class RobotControlUI:
     def __init__(self):
         self.root = ctk.CTk()
         self.root.title("Robot Arm Control - Yaskawa GP8")
-        self.root.geometry("750x480")  # Reduced width from 900 to 800
-        self.root.resizable(False, False)  # window non-resizable
+        self.root.geometry("750x480")
+        self.root.resizable(False, False)
         ctk.set_appearance_mode("light")
         
-        # Add window close event handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.sim_interface = CoppeliaSimInterface()
@@ -22,10 +21,9 @@ class RobotControlUI:
         self.moving_indicator = None
         self.is_moving = False
         self.saved_pose = None
-        self.gripper_state = False  # False = close, True = open
-        self.wrist_flipped = False  # False = up, True = down
+        self.gripper_state = False
+        self.wrist_flipped = False
 
-        # IK control variables
         self.ik_pos = {"x": 0.0, "y": 0.0, "z": 0.0}
         self.ik_orient = {"roll": 0.0, "pitch": 0.0, "yaw": 0.0}
         self.pos_step = 0.01
@@ -37,16 +35,14 @@ class RobotControlUI:
         self.root.after(100, self.update_ui)
 
     def create_ui(self):
-        # Main frame for FWK and IK panels
         main_frame = ctk.CTkFrame(self.root)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=(5, 5))  # Reduced padding
+        main_frame.pack(fill="both", expand=True, padx=10, pady=(5, 5))
 
         # FWK Panel (Left)
         fwk_frame = ctk.CTkFrame(main_frame)
         fwk_frame.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
         ctk.CTkLabel(fwk_frame, text="Forward Kinematics", font=("Arial", 16, "bold")).pack(pady=(5, 5))
 
-        # Step size for joint adjustments
         step_frame = ctk.CTkFrame(fwk_frame, fg_color="transparent")
         step_frame.pack(fill="x", pady=2)
         ctk.CTkLabel(step_frame, text="Step size (°):", width=80).pack(side="left", padx=10)
@@ -54,10 +50,9 @@ class RobotControlUI:
         self.joint_step_entry.insert(0, "1.0")
         self.joint_step_entry.pack(side="left", padx=5)
 
-        # Joint sliders (arranged vertically)
         for i in range(6):
             limits = joint_limits_deg[i]
-            joint_frame = ctk.CTkFrame(fwk_frame, fg_color="transparent")  # No backdrop
+            joint_frame = ctk.CTkFrame(fwk_frame, fg_color="transparent")
             joint_frame.pack(fill="x", pady=1)
 
             ctk.CTkLabel(joint_frame, text=f"Joint {i+1}:", width=60).pack(side="left", padx=5)
@@ -72,14 +67,13 @@ class RobotControlUI:
             slider.configure(command=lambda val, e=entry, s=slider: self.update_entry_from_slider(e, s))
             entry.bind("<Return>", lambda e, s=slider, ent=entry: self.update_slider_from_entry(s, ent))
 
-        # Actual end-effector position and orientation (from CoppeliaSim)
         pos_frame = ctk.CTkFrame(fwk_frame, fg_color="transparent")
         pos_frame.pack(fill="x", pady=5, anchor="w")
         ctk.CTkLabel(pos_frame, text="Actual End-effector position", font=("Arial", 12, "bold")).pack(padx=(35, 0), anchor="w")
         self.fwk_pos_labels = {}
         self.fwk_orient_labels = {}
         for label, key in [("X:", "x"), ("Y:", "y"), ("Z:", "z")]:
-            subframe = ctk.CTkFrame(pos_frame, fg_color="transparent")  # Changed to transparent
+            subframe = ctk.CTkFrame(pos_frame, fg_color="transparent")
             subframe.pack(fill="x", pady=1)
             ctk.CTkLabel(subframe, text=label, width=30).pack(side="left", padx=5)
             value_label = ctk.CTkLabel(subframe, text="0.0", width=50)
@@ -91,12 +85,11 @@ class RobotControlUI:
             orient_value.pack(side="left", padx=5)
             self.fwk_orient_labels[key] = orient_value
 
-        # IK Panel (Right) - Using Grid Layout
+        # IK Panel (Right)
         ik_frame = ctk.CTkFrame(main_frame)
         ik_frame.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
         ctk.CTkLabel(ik_frame, text="Inverse Kinematics", font=("Arial", 16, "bold")).grid(row=0, column=0, columnspan=3, pady=(5, 5))
 
-        # Step size for position and orientation
         step_frame = ctk.CTkFrame(ik_frame, fg_color="transparent")
         step_frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=2)
         ctk.CTkLabel(step_frame, text="Pos Step (m):", width=80).pack(side="left", padx=5)
@@ -108,7 +101,7 @@ class RobotControlUI:
         self.orient_step_entry.insert(0, "1.0")
         self.orient_step_entry.pack(side="left", padx=5)
 
-        # X, Y Control (Arrow Cross)
+        # X, Y Control
         xy_frame = ctk.CTkFrame(ik_frame, fg_color="transparent")
         xy_frame.grid(row=2, column=0, padx=(5, 0), pady=5)  
         ctk.CTkLabel(xy_frame, text="X, Y Control", font=("Arial", 12, "bold")).pack()
@@ -139,7 +132,7 @@ class RobotControlUI:
             inc_btn = ctk.CTkButton(subframe, text="►", width=30, command=lambda k=key: self.adjust_ik_orient(k, 1))
             inc_btn.pack(side="left", padx=2)
 
-        # Z Control, Gripper, and IK Input Fields (Same Row)
+        # Z Control, Gripper, and IK Input Fields
         z_gripper_input_frame = ctk.CTkFrame(ik_frame, fg_color="transparent") 
         z_gripper_input_frame.grid(row=3, column=0, columnspan=3, pady=5, sticky="ew")
 
@@ -161,7 +154,7 @@ class RobotControlUI:
         self.gripper_btn = ctk.CTkButton(gripper_frame, text="Close" if self.gripper_state else "Open", width=60, command=self.toggle_gripper)
         self.gripper_btn.pack(pady=2)
 
-        # IK Position and Orientation Input Fields (3x2 Grid, Same Row)
+        # IK Position and Orientation Input Fields
         ik_pos_frame = ctk.CTkFrame(z_gripper_input_frame, fg_color="transparent") 
         ik_pos_frame.pack(side="left", padx=5)
         self.ik_pos_labels = {}
@@ -183,7 +176,7 @@ class RobotControlUI:
             self.ik_entries[f"r{key}"] = orient_entry
             self.ik_orient_labels[key] = orient_entry
 
-        # Buttons (Horizontal Row)
+        # Buttons
         button_frame = ctk.CTkFrame(ik_frame, fg_color="transparent")
         button_frame.grid(row=4, column=0, columnspan=3, pady=5)
         self.flip_wrist_btn = ctk.CTkButton(button_frame, text="Flip Wrist", width=55, command=self.flip_wrist)  
@@ -195,19 +188,16 @@ class RobotControlUI:
         load_btn = ctk.CTkButton(button_frame, text="Load Pose", width=70, command=self.load_pose)  
         load_btn.pack(side="left", padx=5)
 
-        # Create a status frame to contain the status message
+        # Status message
         status_frame = ctk.CTkFrame(ik_frame, fg_color="transparent")
         status_frame.grid(row=5, column=0, columnspan=3, pady=2)
-        
-        # Status message 
         self.status_message = ctk.CTkLabel(status_frame, text="", font=("Arial", 12))
         self.status_message.pack(padx=5)
 
-        # Robot Status Panel and Bottom Panel combined
+        # Bottom panel
         bottom_frame = ctk.CTkFrame(self.root)
         bottom_frame.pack(fill="x", padx=10, pady=5)
         
-        # Left side - Status indicators
         status_container = ctk.CTkFrame(bottom_frame, fg_color="transparent")
         status_container.pack(side="left", fill="x", expand=True, padx=5)
         self.status_label = ctk.CTkLabel(status_container, text="Connection Status: Disconnected", text_color="red", font=("Arial", 12))
@@ -215,7 +205,6 @@ class RobotControlUI:
         self.moving_indicator = ctk.CTkLabel(status_container, text="●", text_color="gray", font=("Arial", 12))
         self.moving_indicator.pack(side="left", padx=5)
         
-        # Right side - Buttons
         button_container = ctk.CTkFrame(bottom_frame, fg_color="transparent")
         button_container.pack(side="right", padx=5)
         ctk.CTkButton(button_container, text="Connect", command=self.connect_sim).pack(side="left", padx=5)
@@ -254,7 +243,6 @@ class RobotControlUI:
         self.ik_pos[axis] += direction * self.pos_step
         self.update_ik_display()
         
-        # Get current joint angles to use as initial guess
         current_angles = None
         if self.sim_interface.is_connected():
             current_angles = self.sim_interface.get_joint_angles()
@@ -269,7 +257,6 @@ class RobotControlUI:
         self.ik_orient[axis] += direction * self.orient_step
         self.update_ik_display()
         
-        # Get current joint angles to use as initial guess
         current_angles = None
         if self.sim_interface.is_connected():
             current_angles = self.sim_interface.get_joint_angles()
@@ -281,7 +268,7 @@ class RobotControlUI:
             if key in ["x", "y", "z"]:
                 self.ik_pos[key] = float(self.ik_entries[key].get())
             else:
-                orient_key = key[1]  # rx, ry -> roll, pitch
+                orient_key = key[1]
                 self.ik_orient[{"x": "roll", "y": "pitch"}[orient_key]] = float(self.ik_entries[key].get())
             self.update_ik_display()
         except ValueError:
@@ -301,7 +288,6 @@ class RobotControlUI:
         self.sim_interface.set_gripper_status(new_state)
         self.gripper_state = new_state
         self.gripper_btn.configure(text="Open" if not new_state else "Close")
-        # Add temporary message for gripper state
         self.show_status_message(f"Gripper {'opened' if new_state else 'closed'}", "info")
 
     def flip_wrist(self):
@@ -360,29 +346,19 @@ class RobotControlUI:
             self.show_status_message("Pose loaded!", "success")
 
     def show_status_message(self, message, msg_type="info"):
-        """
-        Display a status message with appropriate coloring based on message type.
-        
-        Parameters:
-            message (str): The message to display
-            msg_type (str): Message type - 'info', 'success', 'warning', 'error'
-        """
-        # Set text color based on message type
         if msg_type == "warning":
             self.status_message.configure(text=message, text_color="orange")
         elif msg_type == "error":
             self.status_message.configure(text=message, text_color="red")
         elif msg_type == "success":
             self.status_message.configure(text=message, text_color="green")
-        else:  # "info" and any other types
+        else:
             self.status_message.configure(text=message, text_color=("gray10", "gray90"))
-        # Reset text after 2 seconds
         self.root.after(2000, lambda: self.status_message.configure(text=""))
 
     def update_ui(self):
         if self.sim_interface.is_connected():
             pos, orient = self.sim_interface.get_end_effector_pose()
-            # Remove debug print statement
             if pos and orient:
                 for key in ["x", "y", "z"]:
                     self.fwk_pos_labels[key].configure(text=f"{pos[key == 'x' and 0 or key == 'y' and 1 or 2]:.2f}")
@@ -403,7 +379,6 @@ class RobotControlUI:
         if self.sim_interface.connect():
             self.status_label.configure(text="Connection Status: Connected", text_color="green")
             
-            # Update joint sliders with actual positions from CoppeliaSim
             angles = self.sim_interface.get_joint_angles()
             if angles:
                 for i, (slider, entry) in enumerate(zip(self.fwk_sliders, self.fwk_entries)):
@@ -411,7 +386,6 @@ class RobotControlUI:
                     entry.delete(0, "end")
                     entry.insert(0, f"{angles[i]:.1f}")
                 
-                # Update IK display without sending commands back to robot
                 final_T, _ = forward_kinematics(angles + [0])
                 pos = final_T[:3, 3]
                 euler = [np.degrees(a) for a in rotation_matrix_to_euler_angles(final_T[:3, :3])]
@@ -423,7 +397,6 @@ class RobotControlUI:
                     self.gripper_state = 1
                     self.sim_interface.set_gripper_status(1)
                     self.gripper_btn.configure(text="close" if self.gripper_state else "open")
-
 
     def disconnect_sim(self):
         if self.sim_interface.disconnect():
@@ -448,14 +421,12 @@ class RobotControlUI:
             entry.delete(0, "end")
             entry.insert(0, "0.0")
         
-        # Calculate actual end-effector position and orientation at home position
         final_T, _ = forward_kinematics(home_angles + [0])
         pos = final_T[:3, 3]
         euler = [np.degrees(a) for a in rotation_matrix_to_euler_angles(final_T[:3, :3])]
         self.ik_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
         self.ik_orient = {"roll": euler[0], "pitch": euler[1], "yaw": euler[2]}
         
-        # Update IK display
         self.update_ik_display()
         self.show_status_message("Robot moved to home position", "success")
 
